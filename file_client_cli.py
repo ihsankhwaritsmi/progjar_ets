@@ -8,33 +8,24 @@ import argparse
 def send_command(command_str=""):
     global server_address
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(server_address)
-    logging.warning(f"connecting to {server_address}")
+    sock.settimeout(10)  # Prevents hanging
     try:
-        logging.warning(f"sending message ")
-        # sock.sendall(command_str.encode())
+        sock.connect(server_address)
         sock.sendall((command_str + "\r\n\r\n").encode())
-        # Look for the response, waiting until socket is done (no more data)
-        data_received = ""  # empty string
+        data_received = ""
         while True:
-            # socket does not receive all data at once, data comes in part, need to be concatenated at the end of process
-            data = sock.recv(16)
-            if data:
-                # data is not empty, concat with previous content
-                data_received += data.decode()
-                if "\r\n\r\n" in data_received:
-                    break
-            else:
-                # no more data, stop the process by break
+            data = sock.recv(4096)  # Larger buffer for big files
+            if not data:
                 break
-        # at this point, data_received (string) will contain all data coming from the socket
-        # to be able to use the data_received as a dict, need to load it using json.loads()
-        hasil = json.loads(data_received)
-        logging.warning("data received from server:")
-        return hasil
-    except:
-        logging.warning("error during data receiving")
-        return False
+            data_received += data.decode()
+            if "\r\n\r\n" in data_received:
+                break
+        return json.loads(data_received)
+    except (socket.error, json.JSONDecodeError) as e:
+        logging.error(f"Network error: {e}")
+        return {"status": "ERROR", "message": str(e)}
+    finally:
+        sock.close()  # Ensure socket is closed
 
 
 def remote_list():
