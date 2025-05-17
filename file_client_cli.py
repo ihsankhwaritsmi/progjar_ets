@@ -138,6 +138,13 @@ if __name__ == "__main__":
         help="Number of client worker threads",
     )
     parser.add_argument(
+        "--server_workers",
+        type=int,
+        default=1,
+        choices=[1, 5, 50],
+        help="Number of server worker threads/processes",
+    )
+    parser.add_argument(
         "--server_address",
         type=str,
         default="172.16.16.101:6789",
