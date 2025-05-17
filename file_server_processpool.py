@@ -57,6 +57,7 @@ class Server(threading.Thread):
             )
             self.executor.submit(client.process)
             self.the_clients.append(client)
+        self.executor.shutdown(wait=True)
 
 
 if __name__ == "__main__":
