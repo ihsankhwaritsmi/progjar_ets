@@ -2,6 +2,7 @@ from socket import *
 import socket
 import threading
 import logging
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 
 from file_protocol import FileProtocol
@@ -55,5 +56,10 @@ class Server(threading.Thread):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    svr = Server(ipaddress="0.0.0.0", port=6789)
+    parser = argparse.ArgumentParser(description="File Server with Thread Pool")
+    parser.add_argument(
+        "--max_workers", type=int, default=2, help="Maximum number of worker threads"
+    )
+    args = parser.parse_args()
+    svr = Server(ipaddress="0.0.0.0", port=6789, max_workers=args.max_workers)
     svr.start()

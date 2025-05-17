@@ -2,8 +2,7 @@ import socket
 import json
 import base64
 import logging
-
-server_address = ("0.0.0.0", 7777)
+import argparse
 
 
 def send_command(command_str=""):
@@ -53,17 +52,21 @@ def remote_list():
 
 def remote_get(filename=""):
     command_str = f"GET {filename}"
-    hasil = send_command(command_str)
-    if hasil["status"] == "OK":
-        # proses file dalam bentuk base64 ke bentuk bytes
-        namafile = hasil["data_namafile"]
-        isifile = base64.b64decode(hasil["data_file"])
-        fp = open(namafile, "wb+")
-        fp.write(isifile)
-        fp.close()
-        return True
-    else:
-        print("Gagal")
+    try:
+        hasil = send_command(command_str)
+        if hasil["status"] == "OK":
+            # proses file dalam bentuk base64 ke bentuk bytes
+            namafile = hasil["data_namafile"]
+            isifile = base64.b64decode(hasil["data_file"])
+            fp = open(namafile, "wb+")
+            fp.write(isifile)
+            fp.close()
+            return True
+        else:
+            print("Gagal")
+            return False
+    except Exception as e:
+        print(f"Download failed with exception: {e}")
         return False
 
 
@@ -73,23 +76,26 @@ def remote_upload(filepath=""):
     if not os.path.isfile(filepath):
         print(f"File '{filepath}' tidak ditemukan.")
         return False
+    try:
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+        encoded_data = base64.b64encode(file_data).decode()
 
-    with open(filepath, "rb") as f:
-        file_data = f.read()
-    encoded_data = base64.b64encode(file_data).decode()
+        filename = os.path.basename(filepath)
+        # Format command upload dengan nama file dan isi base64, misal:
+        # UPLOAD nama_file base64encodedstring
+        # Karena base64 bisa sangat panjang, lebih baik gunakan kutipan agar parsing lebih aman
+        command_str = f'UPLOAD "{filename}" "{encoded_data}"'
 
-    filename = os.path.basename(filepath)
-    # Format command upload dengan nama file dan isi base64, misal:
-    # UPLOAD nama_file base64encodedstring
-    # Karena base64 bisa sangat panjang, lebih baik gunakan kutipan agar parsing lebih aman
-    command_str = f'UPLOAD "{filename}" "{encoded_data}"'
-
-    hasil = send_command(command_str)
-    if hasil and hasil.get("status") == "OK":
-        print(f"File '{filename}' berhasil diupload.")
-        return True
-    else:
-        print("Upload gagal.")
+        hasil = send_command(command_str)
+        if hasil and hasil.get("status") == "OK":
+            print(f"File '{filename}' berhasil diupload.")
+            return True
+        else:
+            print("Upload gagal.")
+            return False
+    except Exception as e:
+        print(f"Upload failed with exception: {e}")
         return False
 
 
@@ -109,8 +115,74 @@ def remote_delete(filename=""):
 
 
 if __name__ == "__main__":
-    server_address = ("172.16.16.101", 6789)
-    remote_list()
+    parser = argparse.ArgumentParser(description="File Client CLI")
+    parser.add_argument(
+        "--operation",
+        type=str,
+        default="upload",
+        choices=["upload", "download"],
+        help="Operation to perform (upload or download)",
+    )
+    parser.add_argument(
+        "--file_size",
+        type=int,
+        default=10,
+        choices=[10, 50, 100],
+        help="File size in MB (10, 50, or 100)",
+    )
+    parser.add_argument(
+        "--client_workers",
+        type=int,
+        default=1,
+        choices=[1, 5, 50],
+        help="Number of client worker threads",
+    )
+    parser.add_argument(
+        "--server_address",
+        type=str,
+        default="172.16.16.101:6789",
+        help="Server address (ip:port)",
+    )
+    args = parser.parse_args()
+
+    server_address = tuple(args.server_address.split(":"))
+    server_address = (server_address[0], int(server_address[1]))
+
+    # remote_list()
     # remote_get('donalbebek.png')
     # remote_upload('shrek.jpg')
-    remote_delete("shrek.jpg")
+    # remote_delete("shrek.jpg")
+
+    server_workers = [1, 5, 50]
+    operations = ["upload", "download"]
+    file_sizes = [10, 50, 100]
+    client_workers = [1, 5, 50]
+
+    for operation in operations:
+        for file_size in file_sizes:
+            for client_worker in client_workers:
+                for server_worker in server_workers:
+                    print(
+                        f"Operation: {operation}, File Size: {file_size}MB, Client Workers: {client_worker}, Server Workers: {server_worker}"
+                    )
+                    filename = f"file_{file_size}MB.bin"
+                    filepath = filename  # Assuming files are in the same directory
+
+                    import time
+
+                    start_time = time.time()
+                    if operation == "upload":
+                        success = remote_upload(filepath)
+                    elif operation == "download":
+                        success = remote_get(filename)
+                    end_time = time.time()
+                    total_time = end_time - start_time
+                    file_size_bytes = file_size * 1024 * 1024  # Convert MB to bytes
+                    throughput = file_size_bytes / total_time
+                    print(
+                        f"Total time: {total_time:.2f} seconds, Throughput: {throughput:.2f} bytes/second"
+                    )
+                    if success:
+                        print("Operation successful")
+                    else:
+                        print("Operation failed")
