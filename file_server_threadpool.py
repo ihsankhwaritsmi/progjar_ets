@@ -11,9 +11,10 @@ fp = FileProtocol()
 
 
 class ProcessTheClient:
-    def __init__(self, connection, address):
+    def __init__(self, connection, address, max_workers=2):
         self.connection = connection
         self.address = address
+        self.max_workers = max_workers
 
     def process(self):
         buffer = ""
@@ -38,7 +39,8 @@ class Server(threading.Thread):
         self.the_clients = []
         self.my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self.max_workers = max_workers
+        self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
         threading.Thread.__init__(self)
 
     def run(self):
@@ -49,7 +51,9 @@ class Server(threading.Thread):
             self.connection, self.client_address = self.my_socket.accept()
             logging.warning(f"connection from {self.client_address}")
 
-            client = ProcessTheClient(self.connection, self.client_address)
+            client = ProcessTheClient(
+                self.connection, self.client_address, max_workers=self.max_workers
+            )
             self.executor.submit(client.process)
             self.the_clients.append(client)
 

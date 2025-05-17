@@ -29,10 +29,18 @@ class FileProtocol:
             c_request = c[0].lower().strip()
             logging.warning(f"memproses request: {c_request}")
             params = [x for x in c[1:]]
-            cl = getattr(self.file, c_request)(params)
+            if c_request == "upload":
+                try:
+                    max_workers = int(params[-1])
+                    params = params[:-1]
+                except (IndexError, ValueError):
+                    max_workers = 2  # Default value
+                cl = getattr(self.file, c_request)(params, max_workers=max_workers)
+            else:
+                cl = getattr(self.file, c_request)(params)
             return json.dumps(cl)
-        except Exception:
-            return json.dumps(dict(status="ERROR", data="request tidak dikenali"))
+        except Exception as e:
+            return json.dumps(dict(status="ERROR", data=str(e)))
 
 
 if __name__ == "__main__":

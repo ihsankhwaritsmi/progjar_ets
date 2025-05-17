@@ -26,7 +26,7 @@ class FileInterface:
         except Exception as e:
             return dict(status="ERROR", data=str(e))
 
-    def upload(self, params=[]):
+    def upload(self, params=[], max_workers=2):
         try:
             if len(params) < 2:
                 return dict(status="ERROR", data="Parameter kurang untuk upload")

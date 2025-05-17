@@ -85,7 +85,7 @@ def remote_upload(filepath=""):
         # Format command upload dengan nama file dan isi base64, misal:
         # UPLOAD nama_file base64encodedstring
         # Karena base64 bisa sangat panjang, lebih baik gunakan kutipan agar parsing lebih aman
-        command_str = f'UPLOAD "{filename}" "{encoded_data}"'
+        command_str = f'UPLOAD "{filename}" "{encoded_data}" {args.server_workers}'
 
         hasil = send_command(command_str)
         if hasil and hasil.get("status") == "OK":
