@@ -1,62 +1,42 @@
-from socket import *
-import socket
-import threading
+import json
 import logging
+import shlex
+
+from file_interface import FileInterface
+
+"""
+* class FileProtocol bertugas untuk memproses 
+data yang masuk, dan menerjemahkannya apakah sesuai dengan
+protokol/aturan yang dibuat
+
+* data yang masuk dari client adalah dalam bentuk bytes yang 
+pada akhirnya akan diproses dalam bentuk string
+
+* class FileProtocol akan memproses data yang masuk dalam bentuk
+string
+"""
 
 
-from file_protocol import FileProtocol
+class FileProtocol:
+    def __init__(self):
+        self.file = FileInterface()
 
-fp = FileProtocol()
-
-
-class ProcessTheClient(threading.Thread):
-    def __init__(self, connection, address):
-        self.connection = connection
-        self.address = address
-        threading.Thread.__init__(self)
-
-    def run(self):
-        buffer = ""
-        while True:
-            data = self.connection.recv(1024)
-            if data:
-                buffer += data.decode()
-                if "\r\n\r\n" in buffer:
-                    break
-            else:
-                break
-
-        hasil = fp.proses_string(buffer.strip())
-        hasil = hasil + "\r\n\r\n"
-        self.connection.sendall(hasil.encode())
-        self.connection.close()
-
-
-class Server(threading.Thread):
-    def __init__(self, ipaddress="0.0.0.0", port=8889):
-        self.ipinfo = (ipaddress, port)
-        self.the_clients = []
-        self.my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        threading.Thread.__init__(self)
-
-    def run(self):
-        logging.warning(f"server berjalan di ip address {self.ipinfo}")
-        self.my_socket.bind(self.ipinfo)
-        self.my_socket.listen(1)
-        while True:
-            self.connection, self.client_address = self.my_socket.accept()
-            logging.warning(f"connection from {self.client_address}")
-
-            clt = ProcessTheClient(self.connection, self.client_address)
-            clt.start()
-            self.the_clients.append(clt)
-
-
-def main():
-    svr = Server(ipaddress="0.0.0.0", port=6789)
-    svr.start()
+    def proses_string(self, string_datamasuk=""):
+        logging.warning(f"string diproses: {string_datamasuk}")
+        # c = shlex.split(string_datamasuk.lower())
+        try:
+            c = shlex.split(string_datamasuk)
+            c_request = c[0].lower().strip()
+            logging.warning(f"memproses request: {c_request}")
+            params = [x for x in c[1:]]
+            cl = getattr(self.file, c_request)(params)
+            return json.dumps(cl)
+        except Exception:
+            return json.dumps(dict(status="ERROR", data="request tidak dikenali"))
 
 
 if __name__ == "__main__":
-    main()
+    # contoh pemakaian
+    fp = FileProtocol()
+    print(fp.proses_string("LIST"))
+    print(fp.proses_string("GET pokijan.jpg"))
