@@ -1,64 +1,62 @@
-from socket import *
-import socket
-import threading
-import logging
-import time
-import sys
+import os
+import json
+import base64
+from glob import glob
 
 
-from file_protocol import FileProtocol
+class FileInterface:
+    def __init__(self):
+        os.chdir("files/")
 
-fp = FileProtocol()
+    def list(self, params=[]):
+        try:
+            filelist = glob("*.*")
+            return dict(status="OK", data=filelist)
+        except Exception as e:
+            return dict(status="ERROR", data=str(e))
 
+    def get(self, params=[]):
+        try:
+            filename = params[0]
+            if filename == "":
+                return None
+            fp = open(f"{filename}", "rb")
+            isifile = base64.b64encode(fp.read()).decode()
+            return dict(status="OK", data_namafile=filename, data_file=isifile)
+        except Exception as e:
+            return dict(status="ERROR", data=str(e))
 
-class ProcessTheClient(threading.Thread):
-    def __init__(self, connection, address):
-        self.connection = connection
-        self.address = address
-        threading.Thread.__init__(self)
+    def upload(self, params=[]):
+        try:
+            if len(params) < 2:
+                return dict(status="ERROR", data="Parameter kurang untuk upload")
+            filename = params[0]
+            file_base64 = params[1]
+            # decode isi file dari base64 ke bytes
+            file_bytes = base64.b64decode(file_base64)
+            # tulis file ke disk
+            with open(filename, "wb") as f:
+                f.write(file_bytes)
+            return dict(status="OK", data=f"File {filename} berhasil diupload")
+        except Exception as e:
+            return dict(status="ERROR", data=str(e))
 
-    def run(self):
-        buffer = ""
-        while True:
-            data = self.connection.recv(1024)
-            if data:
-                buffer += data.decode()
-                if "\r\n\r\n" in buffer:
-                    break
-            else:
-                break
+    def delete(self, params=[]):
+        try:
+            if len(params) < 1:
+                return dict(status="ERROR", data="Nama file belum diberikan")
 
-        hasil = fp.proses_string(buffer.strip())
-        hasil = hasil + "\r\n\r\n"
-        self.connection.sendall(hasil.encode())
-        self.connection.close()
+            filename = params[0]
+            if not os.path.exists(filename):
+                return dict(status="ERROR", data=f"File {filename} tidak ditemukan")
 
-
-class Server(threading.Thread):
-    def __init__(self, ipaddress="0.0.0.0", port=8889):
-        self.ipinfo = (ipaddress, port)
-        self.the_clients = []
-        self.my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        threading.Thread.__init__(self)
-
-    def run(self):
-        logging.warning(f"server berjalan di ip address {self.ipinfo}")
-        self.my_socket.bind(self.ipinfo)
-        self.my_socket.listen(1)
-        while True:
-            self.connection, self.client_address = self.my_socket.accept()
-            logging.warning(f"connection from {self.client_address}")
-
-            clt = ProcessTheClient(self.connection, self.client_address)
-            clt.start()
-            self.the_clients.append(clt)
-
-
-def main():
-    svr = Server(ipaddress="0.0.0.0", port=6789)
-    svr.start()
+            os.remove(filename)
+            return dict(status="OK", data=f"File {filename} berhasil dihapus")
+        except Exception as e:
+            return dict(status="ERROR", data=str(e))
 
 
 if __name__ == "__main__":
-    main()
+    f = FileInterface()
+    print(f.list())
+    print(f.get(["pokijan.jpg"]))
