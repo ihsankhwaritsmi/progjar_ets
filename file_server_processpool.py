@@ -1,71 +1,79 @@
 from socket import *
 import socket
-import threading
 import logging
-import argparse
-import multiprocessing
-from concurrent.futures import ProcessPoolExecutor
-
 from file_protocol import FileProtocol
+import multiprocessing
+import concurrent.futures
 
 fp = FileProtocol()
 
-
-class ProcessTheClient:
-    def __init__(self, connection, address, max_workers=2):
-        self.connection = connection
-        self.address = address
-        self.max_workers = max_workers
-
-    def process(self):
-        buffer = ""
+def handle_client(connection, address):
+    """Function to handle client requests"""
+    logging.warning(f"handling connection from {address}")
+    buffer = ""
+    try:
         while True:
-            data = self.connection.recv(1024)
-            if data:
-                buffer += data.decode()
-                if "\r\n\r\n" in buffer:
-                    break
-            else:
+            data = connection.recv(1024*1024)
+            if not data:
                 break
+            buffer += data.decode()
+            while "\r\n\r\n" in buffer:
+                command, buffer = buffer.split("\r\n\r\n", 1)
+                hasil = fp.proses_string(command)
+                response = hasil + "\r\n\r\n"
+                connection.sendall(response.encode())
+    except Exception as e:
+        logging.warning(f"Error: {str(e)}")
+    finally:
+        logging.warning(f"connection from {address} closed")
+        connection.close()
 
-        hasil = fp.proses_string(buffer.strip())
-        hasil = hasil + "\r\n\r\n"
-        self.connection.sendall(hasil.encode())
-        self.connection.close()
 
-
-class Server(threading.Thread):
-    def __init__(self, ipaddress="0.0.0.0", port=8889, max_workers=2):
+class Server:
+    def __init__(self, ipaddress='0.0.0.0', port=8889, pool_size=5):
         self.ipinfo = (ipaddress, port)
-        self.the_clients = []
+        self.pool_size = pool_size
         self.my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.max_workers = max_workers
-        self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
-        threading.Thread.__init__(self)
 
     def run(self):
-        logging.warning(f"server berjalan di ip address {self.ipinfo}")
+        logging.warning(f"server running on ip address {self.ipinfo} with process pool size {self.pool_size}")
         self.my_socket.bind(self.ipinfo)
         self.my_socket.listen(1)
-        while True:
-            self.connection, self.client_address = self.my_socket.accept()
-            logging.warning(f"connection from {self.client_address}")
+        
+        # Create a ProcessPoolExecutor
+        with concurrent.futures.ProcessPoolExecutor(max_workers=self.pool_size) as executor:
+            try:
+                while True:
+                    connection, client_address = self.my_socket.accept()
+                    logging.warning(f"connection from {client_address}")
+                    
+                    # Submit the client handling task to the process pool
+                    executor.submit(handle_client, connection, client_address)
+            except KeyboardInterrupt:
+                logging.warning("Server shutting down")
+            except Exception as e:
+                logging.warning(f"Error in server: {str(e)}")
+            finally:
+                if self.my_socket:
+                    self.my_socket.close()
 
-            client = ProcessTheClient(
-                self.connection, self.client_address, max_workers=self.max_workers
-            )
-            self.executor.submit(client.process)
-            self.the_clients.append(client)
-        self.executor.shutdown(wait=True)
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='File Server')
+    parser.add_argument('--port', type=int, default=6667, help='Server port (default: 6667)')
+    parser.add_argument('--pool-size', type=int, default=5, help='Thread pool size (default: 5)')
+    args = parser.parse_args()
+    
+    svr = Server(ipaddress='0.0.0.0', port=args.port, pool_size=args.pool_size)
+    svr.run()
+    svr = Server(ipaddress='0.0.0.0', port=6667, pool_size=5)
+    svr.run()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    parser = argparse.ArgumentParser(description="File Server with Process Pool")
-    parser.add_argument(
-        "--max_workers", type=int, default=2, help="Maximum number of worker processes"
-    )
-    args = parser.parse_args()
-    svr = Server(ipaddress="0.0.0.0", port=6789, max_workers=args.max_workers)
-    svr.start()
+    # This is important for multiprocessing to work properly on some platforms
+    multiprocessing.freeze_support()
+    logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+    main()
